@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beacon Fold · A lantern puzzle</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101b26;color:#fcf2d7;font:16px "Segoe UI",Arial,sans-serif}main{min-height:100svh;display:flex;flex-direction:column;position:relative;isolation:isolate;overflow:hidden}canvas{position:absolute;inset:0;width:100%;height:100%;z-index:-1}header,footer{display:flex;justify-content:space-between;align-items:center;margin:0 clamp(18px,5vw,84px);gap:12px}header{height:83px;border-bottom:1px solid #c4d4cb45}.brand{display:flex;align-items:center;gap:14px;font:italic 26px Georgia,serif}.mark{color:#ffca73;font-style:normal;font-size:33px}.tools{display:flex;gap:6px}button{font:inherit;color:#f8efd8;background:#142730df;border:1px solid #95aca465;border-radius:6px;padding:10px 14px;cursor:pointer}button:hover,button:focus-visible{background:#35504f;outline-color:#ffd391}button:disabled{opacity:.45;cursor:default}.info{margin:24px clamp(18px,5vw,84px) 0;pointer-events:none}.eyebrow,.stat small{font:600 11px/1.6 Consolas,monospace;letter-spacing:2px;color:#a6d8cf;text-transform:uppercase}h1{font:normal clamp(35px,5vw,72px)/1 Georgia,serif;letter-spacing:-.055em;margin:8px 0 10px}.info p{margin:0;color:#d7dad0;font-size:14px}footer{margin-top:auto;padding:14px 0 25px;border-top:1px solid #b1d1c53b}.stats{display:flex;gap:24px}.stat{display:grid}.stat b{font:26px Georgia,serif}.pad{display:grid;grid-template-columns:repeat(3,39px);gap:3px}.pad button{padding:5px}.pad button:first-child{grid-column:2}.pad button:nth-child(2){grid-column:1}.status{font-size:13px;color:#f5d59a;max-width:32ch}.end{position:absolute;inset:0;display:grid;place-items:center;background:#06131bab;backdrop-filter:blur(5px)}[hidden]{display:none!important}.card{width:min(360px,90vw);padding:34px;background:#172d36;border:1px solid #76968b;border-radius:12px;box-shadow:0 18px 90px #041319}.card h2{font:38px Georgia;margin:12px 0}.primary{background:#f6c680;color:#1e282d;font-weight:bold;border:none}.primary:hover{background:#ffe1ae}.card p{line-height:1.5}.muted{color:#bbcec9}@media(max-width:620px){header{height:60px}.brand{font-size:20px;gap:5px}.mark{font-size:24px}.tools button{font-size:12px;padding:8px}.info{margin-top:14px}.stats{gap:12px}.status{max-width:18ch;font-size:12px}footer{margin-inline:12px}.pad{grid-template-columns:repeat(3,34px)}}@media(max-height:520px){header{height:40px}.info{margin-top:6px}.info h1{font-size:26px;margin:0}.info p{font-size:12px}footer{padding:4px 0}.brand{font-size:18px}}
+</style>
+<main><canvas aria-label="Isometric floating island with a brass lantern and a glowing beacon"></canvas>
+<header><div class="brand"><span class="mark">◈</span> Beacon Fold</div><div class="tools"><button id="undo">Undo</button><button id="reset">Restart</button><button id="hint">Hint</button></div></header>
+<section class="info"><div class="eyebrow" id="chapter"></div><h1 id="name"></h1><p>Roll the lantern upright onto the glowing diamond.</p></section>
+<footer><div class="stats"><div class="stat"><small>Moves</small><b id="moves"></b></div><div class="stat"><small>Par</small><b id="par"></b></div></div><span class="status" role="status" id="status"></span><div class="pad" aria-label="Roll controls"><button data-d="0" aria-label="Roll up">↑</button><button data-d="3" aria-label="Roll left">←</button><button data-d="2" aria-label="Roll down">↓</button><button data-d="1" aria-label="Roll right">→</button></div></footer>
+<section class="end" id="end" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle"><div class="card"><div class="eyebrow">Beacon lit</div><h2 id="endTitle"></h2><p id="result"></p><button class="primary" id="next"></button></div></section></main>
+<script>
+"use strict";
+const levels=/*ISLAND_DATA*/;
+const el=id=>document.getElementById(id),canvas=document.querySelector("canvas"),ctx=canvas.getContext("2d");
+let island=0,level,state,history=[],motion=null,scale,cx,cy,W,H;
+let save={island:0,bests:[]};
+try{const v=JSON.parse(localStorage.getItem("beacon-fold-v1"));if(v&&Number.isInteger(v.island)&&levels[v.island]&&Array.isArray(v.bests))save=v}catch{}
+function persist(){try{localStorage.setItem("beacon-fold-v1",JSON.stringify(save))}catch{}}
+function begin(i){island=i;level=levels[i];state=level.start;history=[];motion=null;el("end").hidden=true;
+ el("chapter").textContent="Island "+String(i+1).padStart(2,"0")+" / 05";el("name").textContent=level.name;
+ el("par").textContent=level.states[state][4];el("status").textContent="Use arrow keys, WASD, or the arrows here.";save.island=i;persist();stats()}
+function stats(){el("moves").textContent=history.length;el("undo").disabled=!history.length}
+function win(){const n=history.length;save.bests[island]=Math.min(save.bests[island]??Infinity,n);save.island=Math.min(island+1,levels.length-1);persist();
+ el("endTitle").textContent=island===4?"All beacons lit.":"Light returns.";el("result").textContent=level.name+" • "+n+" moves. Personal best: "+save.bests[island]+".";
+ el("next").textContent=island===4?"Play again":"Sail to next island";el("end").hidden=false;el("next").focus()}
+const directions=["up ↑","right →","down ↓","left ←"];
+function roll(d){if(motion||!el("end").hidden)return;const next=level.states[state][5][d];
+ if(next<0){el("status").textContent="Open water. Try another direction.";return}
+ history.push(state);motion={from:level.states[state],d,start:performance.now()};state=next;el("status").textContent="";stats()}
+el("undo").onclick=()=>{if(!motion&&history.length){state=history.pop();stats();el("status").textContent="Move undone."}};
+el("reset").onclick=()=>begin(island);el("next").onclick=()=>begin((island+1)%levels.length);
+el("hint").onclick=()=>{if(!motion){const p=level.states[state];const d=p[5].findIndex(id=>id>=0&&level.states[id][4]<p[4]);el("status").textContent="Try rolling "+directions[d]+"."}};
+document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>roll(+b.dataset.d));
+const keys={ArrowUp:0,w:0,ArrowRight:1,d:1,ArrowDown:2,s:2,ArrowLeft:3,a:3};
+window.addEventListener("keydown",e=>{if(e.key in keys){e.preventDefault();roll(keys[e.key])}});
+function point(x,y,z){return [cx+(x*.93-z*.47)*scale,cy+(x*.23+z*.46-y*.88)*scale]}
+function polygon(points,color){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle=color;ctx.fill()}
+function face(points,color){polygon(points.map(p=>point(...p)),color)}
+function noise(n){let v=Math.sin(n*87.177+15.2)*43758.54;return v-Math.floor(v)}
+function sky(t){
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,"#10172c");grad.addColorStop(.43,"#314759");grad.addColorStop(.66,"#c28d83");grad.addColorStop(.67,"#516b76");grad.addColorStop(1,"#132a38");ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ for(let i=0;i<120;i++){ctx.fillStyle="rgba(240,240,213,"+(.2+.5*noise(i))+")";ctx.fillRect(noise(i+9)*W,noise(i+201)*H*.49,1.6,1.6)}
+ const mx=W*.82,my=H*.28,r=Math.min(W,H)*.065,g=ctx.createRadialGradient(mx,my,r*.55,mx,my,r*2.7);g.addColorStop(0,"#f2bd8d66");g.addColorStop(1,"#ffd99900");ctx.fillStyle=g;ctx.fillRect(mx-3*r,my-3*r,6*r,6*r);ctx.fillStyle="#efd1ab";ctx.beginPath();ctx.arc(mx,my,r,0,Math.PI*2);ctx.fill();
+ for(let k=0;k<3;k++){let a=[[0,H*.67]];for(let i=0;i<=90;i++){let h=.62+k*.017-.055*(.5+.5*Math.sin(i*.18+k))-.045*noise(i+k*120);a.push([W*i/90,H*h])}a.push([W,H*.67]);polygon(a,["#766f80","#656478","#4b5969"][k])}
+ for(let i=0;i<90;i++){let y=noise(i+512);ctx.fillStyle="rgba(215,204,183,"+(.04+.09*(1-y))+")";ctx.fillRect(((noise(i)*W+t*(1+y)*.002)%(W+60))-30,H*(.68+.32*y),3+y*25,1)}
+}
+function tile(x,z,type,t){const a=x+.026,b=x+.974,c=z+.026,d=z+.974,n=noise(x+101*z),bot=-.64-.68*n;
+ face([[a,0,d],[b,0,d],[b,bot,d],[a,bot+.14,d]],"#42585c");face([[b,0,c],[b,bot+.18,c],[b,bot,d],[b,0,d]],"#2c414b");
+ face([[a,-.23,d],[b,-.23,d],[b,-.31,d],[a,-.31,d]],"#697371");
+ face([[a,0,c],[b,0,c],[b,0,d],[a,0,d]],["#87a898","#789d90","#92ad99","#82a398"][Math.floor(n*4)]);
+ if(type==="G"){const ring=(s,h,color)=>face([[x+.5,h,z+.5-s],[x+.5+s,h,z+.5],[x+.5,h,z+.5+s],[x+.5-s,h,z+.5]],color);
+ ring(.48,.012,"#354e52");ring(.39,.023,"#ffe1a0");ring(.29,.034,"#805d44");ring(.16+.04*Math.sin(t*.004),.045,"#fff0ae");
+ }else if(n>.65){face([[a+.12,.01,c+.16],[a+.32,.01,c+.18],[a+.19,.01,c+.21]],"#b4bd9c")}
+}
+function lantern(t){const p=motion?motion.from:level.states[state];let [x,z,w,d]=p,h=2/w/d;
+ let angle=0,px=x,pz=z,dir=motion?.d;
+ if(motion){let f=Math.min(1,(t-motion.start)/220);angle=(1-Math.cos(Math.PI*f))*Math.PI/4;if(dir===1)px+=w;if(dir===2)pz+=d}
+ function transform(u,v,k){let X=x+u*w,Y=v*h,Z=z+k*d;
+ if(motion){let c=Math.cos(angle),s=Math.sin(angle);if(dir===1||dir===3){let off=X-px,sign=dir===1?1:-1;X=px+c*off+sign*s*Y;Y=c*Y-sign*s*off}else{let off=Z-pz,sign=dir===2?1:-1;Z=pz+c*off+sign*s*Y;Y=c*Y-sign*s*off}}
+ return [X,Y,Z]}
+ const faces=[];for(let axis=0;axis<3;axis++)for(let side=0;side<2;side++){
+ const quad=(lo,hi)=>[[lo,lo],[hi,lo],[hi,hi],[lo,hi]].map(([a,b])=>transform(...(axis===0?[side,a,b]:axis===1?[a,side,b]:[a,b,side])));
+ let verts=quad(0,1),center=verts.reduce((s,v)=>s+v[0]*.47+v[1]*.62+v[2]*.93,0);
+ faces.push({center,quad,axis,side})}
+ faces.sort((a,b)=>a.center-b.center);for(const f of faces){face(f.quad(0,1),"#654b35");face(f.quad(.035,.965),"#c09452");face(f.quad(.095,.905),"#493f35");face(f.quad(.146,.854),f.axis===1?"#fff0b0":"#ffcb70");face(f.quad(.34,.66),"#fff2bc")}
+}
+function frame(t){const box=canvas.getBoundingClientRect();W=box.width;H=box.height;const ratio=Math.min(devicePixelRatio||1,2);
+ if(canvas.width!==Math.round(W*ratio)||canvas.height!==Math.round(H*ratio)){canvas.width=Math.round(W*ratio);canvas.height=Math.round(H*ratio)}
+ ctx.setTransform(ratio,0,0,ratio,0,0);sky(t);const tiles=[];level.rows.forEach((r,z)=>[...r].forEach((c,x)=>{if(c!==".")tiles.push([x,z,c])}));
+ let xs=[],ys=[];for(const [x,z] of tiles){xs.push(.93*x-.47*(z+1),.93*(x+1)-.47*z);ys.push(.23*x+.46*z-1.76,.23*(x+1)+.46*(z+1)+1.18)}
+ let left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);
+ let y0=document.querySelector(".info").getBoundingClientRect().bottom+5,y1=document.querySelector("footer").getBoundingClientRect().top-6;
+ scale=Math.min(W*.82/(right-left),(y1-y0)/(bottom-top),100);scale=Math.max(4,scale);cx=W/2-scale*(left+right)/2;cy=(y0+y1)/2-scale*(top+bottom)/2;
+ tiles.sort((a,b)=>(a[0]+2*a[1])-(b[0]+2*b[1]));for(const [x,z,c] of tiles)tile(x,z,c,t);
+ lantern(t);if(motion&&t-motion.start>=220){motion=null;if(state===0)win()}
+ requestAnimationFrame(frame)}
+begin(save.island);requestAnimationFrame(frame);
+</script></html>
